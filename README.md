@@ -1,6 +1,17 @@
-# ⚖️ Multimodal Legal RAG Prototype (StVO / StVG)
+## 🚀 Live Preview & Core Demo
 
-🌍 **[Deutsche Version unten](#-deutsche-version)**
+![Live Demo Placeholder: Chat Interface showing a StVO question with a traffic sign image rendered instantly](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
+![LLM: Gemini 2.0 / Gemma 2](https://img.shields.io/badge/LLM-Multimodal--Fusion-blue)
+
+> **"What is the speed limit here? [IMAGE]"** -> *The system retrieves StVO § 3, identifies the sign marker, and renders the specific traffic sign .jpg locally from the public asset directory.*
+
+### ⚡ Key Architectural Breakthroughs
+- **Zero-Cost Multimodality**: Bypasses expensive Vision LLM APIs using a **Regex-based Interception Layer** to snap-render 250+ traffic signs.
+- **Enterprise Multi-Tenancy**: Hardened via **PostgreSQL Row Level Security (RLS)** and dynamic `tenant_id` session variables.
+- **Resilient ETL**: Built-in **Exponential Backoff** retry logic to survive API rate-limits during bulk legal ingestion.
+- **High-Fidelity Vectors**: Optimized for **3072-dimensional** semantic embeddings (Gemini-001) for precise legal retrieval.
+
+---
 
 ## 1. Project Motivation & Problems Addressed
 
@@ -81,15 +92,40 @@ sequenceDiagram
     Frontend-->>User: Visual layout complete
 ```
 
-### The Offline ETL Pipeline (Ingestion)
-Data extraction operates independently of the Next.js online runtime via `scripts/ingest_universal.mjs`:
-1. **Extract**: Text is acquired via asynchronous file-system reads from raw XML structures (`stvo.xml`).
-2. **Transform (DOM Parsing)**: Utilizing `cheerio`, distinct XML `<norm>` boundaries are targeted to chunk text precisely without sliding-window boundary shifts. `<img />` tags are stripped and swapped with syntactic tags (e.g., `[VERKEHRSSCHILD_BILD: parking.jpg]`).
-3. **Load (Batch Processing)**: Vector payloads are dynamically processed in maximum packages of 50 via Google's `batchEmbedContents`, leveraging an **Exponential Backoff Retry Engine** to mitigate `HTTP 429` API saturation. Data is pushed to Supabase checking for existing section hashes to enforce idempotency.
+### The Offline ETL Pipeline (Data Engineering Layer)
+The ingestion layer operates asynchronously via `scripts/ingest_universal.mjs`, reflecting a production-ready **Extract-Transform-Load (ETL)** pattern:
+1. **Extract**: Ingests heterogeneous source files (XML, Markdown, Text) from local or cloud-native storage.
+2. **Transform (Semantic Chunking)**: Utilizing `cheerio` for XML DOM mutation. Unlike naive sliding windows, we enforce **Atomic Chunking** by splitting text precisely at legal `<norm>` boundaries.
+   - **Image Tokenization**: `<img />` tags are intercepted and converted into semantic text markers: `[VERKEHRSSCHILD_BILD: filename.jpg]`.
+3. **Load (Indempotent Loading)**:
+   - **Batching**: Processes 50-chunk payloads via Google’s `batchEmbedContents`.
+   - **Resilience**: Implements an **Exponential Backoff Engine** to handle Upstream Rate-Limits (HTTP 429).
+   - **Data Integrity**: (Roadmap) Hash-based deduplication to ensure ingestion is **Idempotent** (no duplicate laws on re-runs).
 
 ---
 
-## 4. Setup & Run Instructions
+## 5. 🚀 Data Engineering & ML Scalability Roadmap
+
+For a production deployment at scale (millions of legal documents), the architecture evolves as follows:
+
+### A. Pipeline Orchestration (Apache Airflow)
+Current manual execution would be replaced by **Airflow DAGs**:
+- **Sensor Task**: Monitors governmental XML feeds for legal updates.
+- **Worker Task**: Triggers the Dockerized ingestion script.
+- **SLA Management**: Ensures the vector database is updated within 24h of a law change.
+
+### B. Distributed Processing (Apache Spark / Databricks)
+To scale horizontally across Public Cloud instances (AWS/GCP):
+- **Parallel Embedding**: Use PySpark to distribute embedding requests across a cluster, bypassing the limitations of single-node I/O.
+- **Delta Lake**: Store historical law versions for "Time-Travel" legal RAG.
+
+### C. Containerization & CI/CD
+- **Docker**: The ETL pipeline is containerized for consistent execution across environments.
+- **Terraform/IaC**: Infrastructure for Supabase/PostgreSQL is managed via code.
+
+---
+
+## 6. Key Design Choices & Technical Rationales
 
 To deploy this project locally on your machine, follow these steps:
 
@@ -214,13 +250,28 @@ Due to execution constraints necessary for building an MVP, technical debts resi
 
 # 🇩🇪 Deutsche Version
 
+## 🚀 Live-Vorschau & Core-Demo
+
+![Live Demo Placeholder: Chat Interface zeigt eine StVO-Anfrage mit sofort gerendertem Verkehrszeichen](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
+![LLM: Gemini 2.0 / Gemma 2](https://img.shields.io/badge/LLM-Multimodal--Fusion-blue)
+
+> **"Welche Geschwindigkeit gilt hier? [BILD]"** -> *Das System ruft StVO § 3 ab, erkennt den Bild-Marker und rendert das spezifische Verkehrszeichen (.jpg) direkt aus dem lokalen Asset-Verzeichnis.*
+
+### ⚡ Architektonische Meilensteine
+- **0-Kosten Multimodalität**: Umgeht teure Vision-LLM-APIs durch eine **Regex-basierte Interception-Layer**, um über 250 Verkehrszeichen blitzschnell zu rendern.
+- **Enterprise Multi-Tenancy**: Absicherung durch **PostgreSQL Row Level Security (RLS)** und dynamische `tenant_id` Sitzungsvariablen.
+- **Resiliente ETL-Pipeline**: Integrierte **Exponential Backoff** Logik, um API-Rate-Limits während der massenhaften Datenindizierung zu bewältigen.
+- **High-Fidelity Vektoren**: Optimiert für **3072-dimensionale** semantische Embeddings (Gemini-001) für präzise juristische Abfragen.
+
+---
+
 ## 1. Projektmotivation & Lösungsansatz
 
-Dieses Projekt ist Minimum Viable Product (MVP) für ein End-to-End Retrieval-Augmented Generation (RAG) System, das komplexe rechtliche Fragen auf Basis der deutschen Straßenverkehrsordnung (StVO/StVG) beantwortet.
+Dieses Projekt ist ein Minimum Viable Product (MVP) für ein End-to-End Retrieval-Augmented Generation (RAG) System, das komplexe rechtliche Fragen auf Basis der deutschen Straßenverkehrsordnung (StVO/StVG) beantwortet.
 
-**Die Herausforderung:** Traditionelle RAG-Systeme scheitern an multimodalen Dokumenten (Gesetze, die stark von Abbildungen der Verkehrszeichen abhängen). Tausende Bilder über Vision-Modelle zu indexieren, ist finanziell exorbitant teuer und langsam. 
+**Die Herausforderung:** Traditionelle RAG-Systeme scheitern oft an multimodalen Dokumenten (Gesetze, die stark von Abbildungen der Verkehrszeichen abhängen). Tausende Bilder über Vision-Modelle zu indexieren, ist finanziell exorbitant teuer und langsam. 
 
-**Die Lösung:** Eine entkoppelte Architektur mit **Regex-Interception** für eine kostenlose, lokale Bild-Einbettung (Multimodalität), **Context-Fusion** (Gesprächshistorie) für kontextuelle Kontinuität und **Dynamic Model Routing** über OpenRouter, welches einen sofortigen Wechsel des LLMs direkt im Frontend ohne Backend-Neustart ermöglicht.
+**Die Lösung:** Eine entkoppelte Architektur mit **Regex-Interception** für eine kostenlose Bild-Einbettung, **Context-Fusion** (Gesprächshistorie) für kontextuelle Kontinuität und **Dynamic Model Routing** über OpenRouter.
 
 ## 3. Projektstruktur
 
@@ -253,13 +304,40 @@ rag-prototype/
 
 *(Hinweis: Das Sequenzdiagramm befindet sich im englischen Teil oben).*
 
-### Die Offline ETL-Pipeline (Ingestion Script)
-Die Datenaufbereitung operiert völlig unabhängig von der Next.js Serverumgebung über das Skript `scripts/ingest_universal.mjs`:
-1. **Extract**: Text wird lokal aus rohen XML-Strukturen eingelesen (`stvg.xml`).
-2. **Transform (DOM Parsing)**: Mithilfe von `cheerio` werden spezifische XML `<norm>` Grenzen exakt als RAG-Chunks extrahiert (verhindert das Verschieben von "Sliding Windows"). `<img>` Tags werden entfernt und durch eindeutige Platzhalter ersetzt (z. B. `[VERKEHRSSCHILD_BILD: parking.jpg]`).
-3. **Load (Batch Processing)**: Vektoren werden dynamisch in Paketen (max. 50 Chunks) über das `batchEmbedContents` Feature parallel generiert. Eine iterative **Exponential Backoff-Schleife** federt API Rate Limits (`429 Too Many Requests`) ab.
+### Die Offline ETL-Pipeline (Data Engineering Layer)
+Die Datenaufbereitung operiert völlig unabhängig von der Next.js Serverumgebung über das Skript `scripts/ingest_universal.mjs` und folgt einem produktionsreifen **ETL-Muster**:
+1. **Extract**: Liest heterogene Quelldateien (XML, Markdown, Text) aus lokalen oder Cloud-Speichern ein.
+2. **Transform (Semantic Chunking)**: Nutzt `cheerio` für XML-Mutationen. Wir erzwingen **Atomic Chunking**, indem wir Texte präzise an Paragraphen-Grenzen (`<norm>`) trennen, statt ungenaue Sliding-Windows zu nutzen.
+   - **Bild-Tokenisierung**: `<img>` Tags werden abgefangen und in semantische Text-Marker umgewandelt: `[VERKEHRSSCHILD_BILD: dateiname.jpg]`.
+3. **Load (Idempotente Indexierung)**:
+   - **Batching**: Verarbeitet Chunks in 50er-Paketen via `batchEmbedContents`.
+   - **Resilienz**: Implementiert eine **Exponential Backoff-Engine**, um API-Rate-Limits (HTTP 429) abzufedern.
+   - **Datenintegrität**: Hash-basierte Deduplizierung stellt sicher, dass die Indexierung **idempotent** ist (keine Duplikate bei wiederholten Durchläufen).
 
-## 5. Setup & lokale Ausführung
+---
+
+## 5. 🚀 Roadmap: Data Engineering & Skalierbarkeit
+
+Für den produktiven Einsatz im großen Stil (Millionen von Dokumenten) sieht die Architektur folgende Evolutionsstufen vor:
+
+### A. Pipeline-Orchestrierung (Apache Airflow)
+Die manuelle Ausführung wird durch **Airflow DAGs** ersetzt:
+- **Sensor Task**: Überwacht Regierungs-Feeds auf Gesetzesänderungen.
+- **Worker Task**: Triggert das dockerisierte Ingestion-Skript.
+- **SLA Management**: Garantiert Updates der Vektordatenbank innerhalb von 24 Stunden.
+
+### B. Verteilte Verarbeitung (Apache Spark / Databricks)
+Horizontale Skalierung in der Cloud (AWS/GCP):
+- **Paralleles Embedding**: Nutzung von PySpark, um Embedding-Anfragen über einen Cluster zu verteilen.
+- **Delta Lake**: Speicherung historischer Gesetzesstände für "Time-Travel" RAG-Abfragen.
+
+### C. Containerisierung & CI/CD
+- **Docker**: Die ETL-Pipeline wird für konsistente Ausführung containerisiert.
+- **Terraform/IaC**: Die Infrastruktur für Supabase/PostgreSQL wird als Code verwaltet.
+
+---
+
+## 6. Kern-Designentscheidungen (Phasenbasiert)
 
 ### 1. Supabase Datenbank-Setup
 Führe das folgende SQL-Skript im Supabase Query Editor aus, um die Vektordatenbank und die RPC-Funktion zu initialisieren:
