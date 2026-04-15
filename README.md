@@ -94,34 +94,38 @@ To deploy this project locally on your machine, follow these steps:
 ### 1. Supabase Database Configuration
 Execute the following SQL string in your Supabase SQL Editor to initialize the vector store and the RPC retrieval function:
 ```sql
+-- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE documents (
-  id BIGSERIAL PRIMARY KEY,
-  content TEXT,
-  embedding vector(768),
-  metadata JSONB
+-- Create table (uuid based, dimension-agnostic for scalability)
+CREATE TABLE public.documents (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    content text NOT NULL,
+    metadata jsonb,
+    embedding vector 
 );
 
--- Remote Procedure Call (RPC) for Cosine Distance calculations (<=>)
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+
+-- Block unauthorized leakage, strictly tying tenant_id to active queries
+CREATE POLICY tenant_isolation ON public.documents FOR SELECT TO anon 
+USING (metadata->>'tenant_id' = current_setting('app.current_tenant', true));
+
+-- RPC Function implementing Security Invoker for RLS obedience
 CREATE OR REPLACE FUNCTION match_documents (
-  query_embedding vector(768),
-  match_threshold float,
-  match_count int,
-  filter_tenant_id text
-)
-RETURNS TABLE (id bigint, content text, metadata jsonb, similarity float)
-LANGUAGE plpgsql
-AS $$
+  query_embedding vector, match_threshold float, match_count int, filter_tenant_id text
+) RETURNS TABLE (id uuid, content text, metadata jsonb, similarity float)
+LANGUAGE plpgsql SECURITY INVOKER AS $$
 BEGIN
+  -- Inject the requested tenant into Postgres transaction context
+  PERFORM set_config('app.current_tenant', filter_tenant_id, true);
+  
   RETURN QUERY
-  SELECT
-    documents.id, documents.content, documents.metadata,
-    1 - (documents.embedding <=> query_embedding) AS similarity
-  FROM documents
-  WHERE 1 - (documents.embedding <=> query_embedding) > match_threshold
-    AND (documents.metadata->>'tenant_id')::text = filter_tenant_id
-  ORDER BY documents.embedding <=> query_embedding
+  SELECT d.id, d.content, d.metadata, 1 - (d.embedding <=> query_embedding) as similarity
+  FROM public.documents d
+  WHERE 1 - (d.embedding <=> query_embedding) >= match_threshold
+  ORDER BY d.embedding <=> query_embedding
   LIMIT match_count;
 END;
 $$;
@@ -143,6 +147,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-key
 GEMINI_API_KEY=your-google-gemini-key
 OPENROUTER_API_KEY=your-openrouter-key
 ```
+
+### 🗝️ Key Vault Breakdown
+- **`NEXT_PUBLIC_SUPABASE_URL`**: The domain address of your database. Not a secret.
+- **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**: The "Guest Pass". Read by the Next.js API to query answers. Completely neutered by Postgres RLS, it cannot accidentally overwrite or destroy laws.
+- **`SUPABASE_SERVICE_ROLE_KEY`**: The "God-Mode Pass". Bypasses all security firewalls. Never exposed to Next.js; strictly bound offline to `scripts/ingest_universal.mjs` for raw backend data loading.
+- **`GEMINI_API_KEY`**: Senses semantics and builds Mathematical Vectors.
+- **`OPENROUTER_API_KEY`**: The conversational linguistic broker.
 
 ### 3. Run the System
 *(Optional)* If you wish to re-ingest the data pipeline:
