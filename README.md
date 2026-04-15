@@ -16,20 +16,20 @@ This project is an End-to-End Retrieval-Augmented Generation (RAG) Minimum Viabl
 
 ```text
 rag-prototype/
-├── data/                       # (Host Machine) Raw data storage (XML, MD)
-├── scripts/                    # Offline ETL Data Pipeline
-│   ├── diagnose.mjs            # Utility: Verify vector dimensionality
-│   ├── ingest_universal.mjs    # Unified Ingestion: XML/MD Strategy Parser
-│   └── purge_stvo.mjs          # Utility: Cleanly drop a specific tenant's data
+├── scripts/                    # Offline ETL Pipeline (Node.js/ESM)
+│   ├── diagnose.mjs            # Connectivity & Dimension Validation
+│   ├── ingest_universal.mjs    # Unified Ingestion: Strategy-based Parser
+│   └── purge_stvo.mjs          # Data Purge: Tenant-specific truncation
 ├── src/
 │   └── app/
-│       ├── api/chat/route.ts   # Backend: Context fusion & Multi-LLM Routing
-│       ├── globals.css         # Styling
-│       └── page.tsx            # Frontend: Regex image parser & UI state
-├── public/                     # Static assets (Traffic signs)
-├── .env.local                  # Environment secrets (Git ignored)
-├── package.json                # Project dependencies
-└── README.md                   # Engineering documentation
+│       ├── api/chat/route.ts   # Edge API: Contextual RAG & Proxy Controller
+│       ├── globals.css         # UI Design System & Component Styling
+│       └── page.tsx            # Client View: Regex-driven Image Intersection
+├── public/                     # Static Assets
+│   └── data/stvo/              # Multimodal Image Binary Assets (.jpg)
+├── .env.local                  # Environment Configuration (Git-ignored)
+├── package.json                # Dependency Manifest
+└── README.md                   # System Architecture Documentation
 ```
 
 ---
@@ -219,19 +219,19 @@ Dieses Projekt ist Minimum Viable Product (MVP) für ein End-to-End Retrieval-Au
 
 ```text
 rag-prototype/
-├── data/                       # (Host) Rohdatenspeicher (XML, MD)
-├── scripts/                    # Offline ETL Datenpipeline
-│   ├── diagnose.mjs            # Utility: Vektordimensionen prüfen
-│   ├── ingest_universal.mjs    # Unified Ingest: XML/MD Strategie-Parser
-│   └── purge_stvo.mjs          # Utility: Tenant-Daten löschen
+├── scripts/                    # Offline ETL-Pipeline (Node.js/ESM)
+│   ├── diagnose.mjs            # Konnektivitäts- und Dimensionsvalidierung
+│   ├── ingest_universal.mjs    # Unified Ingestion: Strategiebasierter Parser
+│   └── purge_stvo.mjs          # Datenbereinigung: Tenant-spezifische Löschung
 ├── src/
 │   └── app/
-│       ├── api/chat/route.ts   # Backend: Context-Fusion & LLM-Routing
-│       ├── globals.css         # Styling
-│       └── page.tsx            # Frontend: Regex-Bild-Parser & UI
-├── public/                     # Statische Assets (Verkehrszeichen)
-├── .env.local                  # Secrets (Git-ignoriert)
-└── README.md                   # Technische Dokumentation
+│       ├── api/chat/route.ts   # Edge API: Kontextuelle RAG-Steuerung
+│       ├── globals.css         # UI Design System & Component Styling
+│       └── page.tsx            # Client View: Regex-gesteuerter Bild-Parser
+├── public/                     # Statische Assets
+│   └── data/stvo/              # Multimodale Bild-Binärdateien (.jpg)
+├── .env.local                  # Umgebungsvariablen (Git-ignoriert)
+└── README.md                   # Systemarchitektur-Dokumentation
 ```
 
 ## 4. Kernarchitektur & ETL-Pipeline
