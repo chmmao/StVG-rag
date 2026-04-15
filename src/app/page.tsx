@@ -75,11 +75,12 @@ export default function ChatPage() {
               value={llmProvider}
               onChange={(e) => setLlmProvider(e.target.value)}
             >
-              <option value="openrouter/auto">Auto-Router (OpenRouter Cloud)</option>
-              <option value="openrouter/elephant-alpha">Elephant Alpha</option>
-              <option value="google/gemma-3-27b-it:free">Gemma 3 27B (Free)</option>
-              <option value="minimax/minimax-m2.5:free">MiniMax M2.5 (Free)</option>
-              <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash (Free)</option>
+              <option value="openrouter/auto">🚀 Auto-Router (Default)</option>
+              <option value="openrouter/elephant-alpha">Elephant Alpha (Free High-Context)</option>
+              <option value="google/gemma-4-31b-it:free">Gemma 4 31B-IT (Free)</option>
+              <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron-3 Super 120B (Free)</option>
+              <option value="openai/gpt-oss-120b:free">GPT-OSS 120B (Free High-Perf)</option>
+              <option value="openai/gpt-oss-20b:free">GPT-OSS 20B (Free Lightweight)</option>
             </select>
           </div>
         </div>

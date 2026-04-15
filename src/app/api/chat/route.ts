@@ -23,22 +23,36 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1(b). Generate embedding for contextualized query
-    const embedRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'models/gemini-embedding-001',
-        content: { parts: [{ text: contextualizedQuery }] }
-      })
-    });
+    // 1(b). Generate embedding for contextualized query (With Resilience Retry)
+    let queryEmbedding;
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    if (!embedRes.ok) {
+    while (retryCount < maxRetries) {
+      const embedRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/gemini-embedding-001',
+          content: { parts: [{ text: contextualizedQuery }] }
+        })
+      });
+      
+      if (embedRes.ok) {
+        const embedData = await embedRes.json();
+        queryEmbedding = embedData.embedding.values;
+        break;
+      } else {
+        retryCount++;
         const errText = await embedRes.text();
-        throw new Error("Google Embedding API rejected the request: " + embedRes.status + " " + errText);
+        console.error(`[Embedding Retry ${retryCount}] Failed: ${embedRes.status} ${errText}`);
+        if (retryCount >= maxRetries) {
+          throw new Error(`Embedding failed after ${maxRetries} attempts: ${embedRes.status} ${errText}`);
+        }
+        // Quadratic backoff: 1s, 2s, 4s...
+        await new Promise(res => setTimeout(res, 1000 * Math.pow(2, retryCount - 1)));
+      }
     }
-    const embedData = await embedRes.json();
-    const queryEmbedding = embedData.embedding.values;
 
     // 2. Perform vector search in Supabase using the RPC function
     const { data: matchedDocuments, error } = await supabase.rpc('match_documents', {
