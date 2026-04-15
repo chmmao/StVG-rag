@@ -16,19 +16,25 @@ This project is an End-to-End Retrieval-Augmented Generation (RAG) Minimum Viabl
 
 ```text
 rag-prototype/
-├── public/                     # Static Assets (Multimodal Traffic Sign Binaries)
+├── public/                     # Static Assets (Multimodal Images & Icons)
 ├── scripts/                    # Offline ETL Pipeline (Node.js/ESM)
 │   ├── diagnose.mjs            # Connectivity & Dimension Validation
 │   ├── ingest_universal.mjs    # Unified Ingestion: Strategy-based Parser
-│   └── purge_stvo.mjs          # Data Purge: Tenant-specific truncation
+│   ├── purge_stvo.mjs          # Data Maintenance: Tenant Truncation
+│   └── test_api.mjs            # API Endpoint Connectivity Testing
 ├── src/
 │   └── app/
-│       ├── api/chat/route.ts   # Edge API: Contextual RAG & Proxy Controller
-│       ├── globals.css         # UI Design System & Styling
-│       └── page.tsx            # Client View: Regex Image Intersection
+│       ├── api/chat/route.ts   # Edge API: RAG Retrieval & LLM Orchestration
+│       ├── globals.css         # UI Design System & Component Styling
+│       └── page.tsx            # Client View: Regex-driven Image Handler
 ├── .env.local                  # Environment Configuration (Git-ignored)
-├── next.config.ts              # Next.js Framework Configuration
+├── .gitignore                  # Git Exclusion Rules
+├── eslint.config.mjs           # Linting & Code Quality Configuration
+├── next-env.d.ts               # Next.js TypeScript Environment Types
+├── next.config.ts              # Next.js Framework & Build Configuration
+├── package-lock.json           # Deterministic Dependency Lockfile
 ├── package.json                # Project Manifest & Dependency List
+├── postcss.config.mjs          # CSS Transformation Configuration
 ├── tsconfig.json               # TypeScript Compiler Configuration
 └── README.md                   # System Architecture Documentation
 ```
@@ -220,19 +226,25 @@ Dieses Projekt ist Minimum Viable Product (MVP) für ein End-to-End Retrieval-Au
 
 ```text
 rag-prototype/
-├── public/                     # Statische Assets (Multimodale Verkehrsschild-Binärdateien)
+├── public/                     # Statische Assets (Multimodale Bilder & Icons)
 ├── scripts/                    # Offline ETL-Pipeline (Node.js/ESM)
 │   ├── diagnose.mjs            # Konnektivitäts- und Dimensionsvalidierung
 │   ├── ingest_universal.mjs    # Unified Ingestion: Strategiebasierter Parser
-│   └── purge_stvo.mjs          # Datenbereinigung: Tenant-spezifische Löschung
+│   ├── purge_stvo.mjs          # Datenbereinigung: Tenant-Löschung
+│   └── test_api.mjs            # API-Konnektivitätstest
 ├── src/
 │   └── app/
-│       ├── api/chat/route.ts   # Edge API: Kontextuelle RAG-Steuerung
+│       ├── api/chat/route.ts   # Edge API: RAG-Abruf & LLM-Orchestrierung
 │       ├── globals.css         # UI Design System & Styling
 │       └── page.tsx            # Client View: Regex-gesteuerter Bild-Parser
 ├── .env.local                  # Umgebungsvariablen (Git-ignoriert)
+├── .gitignore                  # Git-Ausschlussregeln
+├── eslint.config.mjs           # Code-Qualitätskonfiguration (Linting)
+├── next-env.d.ts               # Next.js TypeScript-Umgebungstypen
 ├── next.config.ts              # Next.js Framework-Konfiguration
+├── package-lock.json           # Deterministische Dependency-Lockdatei
 ├── package.json                # Projekt-Manifest & Abhängigkeitsliste
+├── postcss.config.mjs          # CSS-Transformationskonfiguration
 ├── tsconfig.json               # TypeScript-Konfiguration
 └── README.md                   # Systemarchitektur-Dokumentation
 ```
