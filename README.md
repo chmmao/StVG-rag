@@ -16,6 +16,7 @@ This project is an End-to-End Retrieval-Augmented Generation (RAG) Minimum Viabl
 
 ```text
 rag-prototype/
+├── public/                     # Static Assets (Multimodal Traffic Sign Binaries)
 ├── scripts/                    # Offline ETL Pipeline (Node.js/ESM)
 │   ├── diagnose.mjs            # Connectivity & Dimension Validation
 │   ├── ingest_universal.mjs    # Unified Ingestion: Strategy-based Parser
@@ -23,12 +24,12 @@ rag-prototype/
 ├── src/
 │   └── app/
 │       ├── api/chat/route.ts   # Edge API: Contextual RAG & Proxy Controller
-│       ├── globals.css         # UI Design System & Component Styling
-│       └── page.tsx            # Client View: Regex-driven Image Intersection
-├── public/                     # Static Assets
-│   └── data/stvo/              # Multimodal Image Binary Assets (.jpg)
+│       ├── globals.css         # UI Design System & Styling
+│       └── page.tsx            # Client View: Regex Image Intersection
 ├── .env.local                  # Environment Configuration (Git-ignored)
-├── package.json                # Dependency Manifest
+├── next.config.ts              # Next.js Framework Configuration
+├── package.json                # Project Manifest & Dependency List
+├── tsconfig.json               # TypeScript Compiler Configuration
 └── README.md                   # System Architecture Documentation
 ```
 
@@ -219,6 +220,7 @@ Dieses Projekt ist Minimum Viable Product (MVP) für ein End-to-End Retrieval-Au
 
 ```text
 rag-prototype/
+├── public/                     # Statische Assets (Multimodale Verkehrsschild-Binärdateien)
 ├── scripts/                    # Offline ETL-Pipeline (Node.js/ESM)
 │   ├── diagnose.mjs            # Konnektivitäts- und Dimensionsvalidierung
 │   ├── ingest_universal.mjs    # Unified Ingestion: Strategiebasierter Parser
@@ -226,11 +228,12 @@ rag-prototype/
 ├── src/
 │   └── app/
 │       ├── api/chat/route.ts   # Edge API: Kontextuelle RAG-Steuerung
-│       ├── globals.css         # UI Design System & Component Styling
+│       ├── globals.css         # UI Design System & Styling
 │       └── page.tsx            # Client View: Regex-gesteuerter Bild-Parser
-├── public/                     # Statische Assets
-│   └── data/stvo/              # Multimodale Bild-Binärdateien (.jpg)
 ├── .env.local                  # Umgebungsvariablen (Git-ignoriert)
+├── next.config.ts              # Next.js Framework-Konfiguration
+├── package.json                # Projekt-Manifest & Abhängigkeitsliste
+├── tsconfig.json               # TypeScript-Konfiguration
 └── README.md                   # Systemarchitektur-Dokumentation
 ```
 
