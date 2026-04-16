@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import * as cheerio from 'cheerio';
 import { createClient } from '@supabase/supabase-js';
@@ -20,7 +21,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // -- 2. Utility Functions --
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Engineering Resilience: Exponential Backoff for API calls
+// [CROSS-REFERENCE] A TypeScript equivalent lives in src/lib/ai-client.ts for the Next.js runtime.
+// If you modify the retry logic here, update both locations.
 async function fetchWithBackoff(fetchFn, maxRetries = 5, baseDelay = 3000) {
   let attempt = 0;
   while (attempt < maxRetries) {
@@ -69,6 +71,11 @@ function chunkText(text, chunkSize, overlap) {
   return chunks;
 }
 
+// [Enterprise] SHA-256 content hash for idempotent ingestion
+function hashContent(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
 // -- 3. Parsing Strategies --
 
 // Strategy A: StVG / StVO XML Semantic Parser (Handles <norm> and [VERKEHRSSCHILD_BILD])
@@ -106,7 +113,13 @@ async function parseStvgXml(xmlData, tenantId, sourceFileName) {
     for (let c = 0; c < textChunks.length; c++) {
       chunks.push({
         text: textChunks[c],
-        metadata: { tenant_id: tenantId, source: sourceFileName, section: section, chunk_index: c }
+        metadata: {
+          tenant_id: tenantId,
+          source: sourceFileName,
+          section: section,
+          chunk_index: c,
+          content_hash: hashContent(textChunks[c]),
+        }
       });
     }
   }
@@ -125,7 +138,13 @@ async function parseGenericDocument(rawText, tenantId, sourceFileName) {
     for (let j = 0; j < subChunks.length; j++) {
       chunks.push({
         text: subChunks[j],
-        metadata: { tenant_id: tenantId, source: sourceFileName, paragraph_index: i, chunk_index: j }
+        metadata: {
+          tenant_id: tenantId,
+          source: sourceFileName,
+          paragraph_index: i,
+          chunk_index: j,
+          content_hash: hashContent(subChunks[j]),
+        }
       });
     }
   }
@@ -210,9 +229,33 @@ async function ingest() {
     console.log(`Processing Batch ${Math.floor(i / batchSize) + 1} / ${Math.ceil(allChunks.length / batchSize)} (${batch.length} chunks)...`);
     
     try {
-      const embeddings = await getBatchEmbeddings(batch.map(b => b.text));
+      // [Enterprise] Idempotency: query existing hashes to skip already-ingested chunks
+      const batchHashes = batch.map(b => b.metadata.content_hash);
+      const { data: existingRows } = await supabase
+        .from('documents')
+        .select('metadata')
+        .eq('metadata->>tenant_id', batch[0].metadata.tenant_id)
+        .eq('metadata->>source', batch[0].metadata.source)
+        .in('metadata->>content_hash', batchHashes);
+
+      const existingHashes = new Set(
+        (existingRows || []).map(r => r.metadata?.content_hash)
+      );
+
+      const newChunks = batch.filter(b => !existingHashes.has(b.metadata.content_hash));
+
+      if (newChunks.length === 0) {
+        console.log(`  → Batch fully deduplicated. Skipping (0 new chunks).`);
+        continue;
+      }
+
+      if (newChunks.length < batch.length) {
+        console.log(`  → Dedup: ${batch.length - newChunks.length} existing chunks skipped, ${newChunks.length} new.`);
+      }
+
+      const embeddings = await getBatchEmbeddings(newChunks.map(b => b.text));
       
-      const insertData = batch.map((b, idx) => ({
+      const insertData = newChunks.map((b, idx) => ({
         content: b.text,
         embedding: embeddings[idx],
         metadata: b.metadata

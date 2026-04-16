@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { embedWithRetry } from '@/lib/ai-client';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!; // strict runtime bound to anon for RLS
 const supabase = createClient(supabaseUrl, supabaseKey);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
+
+// [Enterprise] Tenant validation whitelist — rejects unknown namespaces at the API boundary
+const VALID_TENANTS = new Set(['tenant-stvg', 'tenant-a']);
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +16,14 @@ export async function POST(request: Request) {
 
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    // [Enterprise] Reject unknown tenant namespaces before any DB/API interaction
+    if (!VALID_TENANTS.has(tenant_id)) {
+      return NextResponse.json(
+        { error: `Invalid workspace: "${tenant_id}". Valid: ${[...VALID_TENANTS].join(', ')}` },
+        { status: 400 }
+      );
     }
 
     // 1(a). Contextualize the vector query using recent conversational memory
@@ -23,36 +35,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1(b). Generate embedding for contextualized query (With Resilience Retry)
-    let queryEmbedding;
-    let retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries) {
-      const embedRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'models/gemini-embedding-001',
-          content: { parts: [{ text: contextualizedQuery }] }
-        })
-      });
-      
-      if (embedRes.ok) {
-        const embedData = await embedRes.json();
-        queryEmbedding = embedData.embedding.values;
-        break;
-      } else {
-        retryCount++;
-        const errText = await embedRes.text();
-        console.error(`[Embedding Retry ${retryCount}] Failed: ${embedRes.status} ${errText}`);
-        if (retryCount >= maxRetries) {
-          throw new Error(`Embedding failed after ${maxRetries} attempts: ${embedRes.status} ${errText}`);
-        }
-        // Quadratic backoff: 1s, 2s, 4s...
-        await new Promise(res => setTimeout(res, 1000 * Math.pow(2, retryCount - 1)));
-      }
-    }
+    // 1(b). Generate embedding via shared AI client (with exponential backoff retry)
+    const queryEmbedding = await embedWithRetry(contextualizedQuery, GEMINI_API_KEY);
 
     // 2. Perform vector search in Supabase using the RPC function
     const { data: matchedDocuments, error } = await supabase.rpc('match_documents', {
