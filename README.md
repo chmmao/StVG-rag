@@ -1,3 +1,14 @@
+# ⚖️ Multimodal Legal RAG Prototype (StVO / StVG)
+
+🌍 **[Deutsche Version unten](#-deutsche-version)**
+
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
+
 ## 🚀 Live Preview & Core Demo
 
 ![Live Demo Placeholder: Chat Interface showing a StVO question with a traffic sign image rendered instantly](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
@@ -264,6 +275,11 @@ npm run health    # CI-ready: exits 0 on success, 1 on failure
 <br>
 
 # 🇩🇪 Deutsche Version
+
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
 
 ## 🚀 Live-Vorschau & Core-Demo
 
