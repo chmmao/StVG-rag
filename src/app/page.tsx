@@ -8,6 +8,7 @@ export default function ChatPage() {
   const [tenant, setTenant] = useState('tenant-stvg');
   const [llmProvider, setLlmProvider] = useState('deepseek-v4-flash');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
 
   const renderMessageContent = (text: string) => {
     const parts = text.split(/!\[.*?\]\((.*?)\)/g);
@@ -32,9 +33,11 @@ export default function ChatPage() {
     if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    // Initialize empty assistant message placeholder
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }, { role: 'assistant', content: '' }]);
     setInput('');
     setIsLoading(true);
+    setLoadingStatus("Connecting to RAG pipeline...");
 
     try {
       const res = await fetch('/api/chat', {
@@ -43,14 +46,71 @@ export default function ChatPage() {
         body: JSON.stringify({ message: userMessage, tenant_id: tenant, llm_provider: llmProvider, history: messages }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP Error ${res.status}`);
+      }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.content, sources: data.sources }]);
+      if (!res.body) throw new Error('Stream execution unsupported by browser.');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunkStr = decoder.decode(value, { stream: true });
+        const lines = chunkStr.split('\n');
+        
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const data = JSON.parse(line);
+                if (data.status) {
+                    setLoadingStatus(data.status);
+                } else if (data.text) {
+                    setLoadingStatus(null); // Clear loading bar when tokens render
+                    setMessages(prev => {
+                        const newMsgs = [...prev];
+                        const lastIndex = newMsgs.length - 1;
+                        newMsgs[lastIndex] = {
+                            ...newMsgs[lastIndex],
+                            content: newMsgs[lastIndex].content + data.text
+                        };
+                        return newMsgs;
+                    });
+                } else if (data.sources) {
+                    setMessages(prev => {
+                        const newMsgs = [...prev];
+                        const lastIndex = newMsgs.length - 1;
+                        newMsgs[lastIndex] = {
+                            ...newMsgs[lastIndex],
+                            sources: data.sources
+                        };
+                        return newMsgs;
+                    });
+                } else if (data.error) {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                // Ignore partial JSON chunks due to buffering
+            }
+        }
+      }
     } catch (error: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+      setMessages(prev => {
+          const newMsgs = [...prev];
+          const lastIndex = newMsgs.length - 1;
+          newMsgs[lastIndex] = {
+              ...newMsgs[lastIndex],
+              content: newMsgs[lastIndex].content + `\n\n⚠️ **Error:** ${error.message}`
+          };
+          return newMsgs;
+      });
     } finally {
       setIsLoading(false);
+      setLoadingStatus(null);
     }
   };
 
@@ -119,7 +179,15 @@ export default function ChatPage() {
             </div>
           ))
         )}
-        {isLoading && (
+        {loadingStatus && (
+          <div className="flex justify-start">
+            <div className="bg-gray-800/90 border border-amber-700/50 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg shadow-amber-900/10">
+              <svg className="animate-spin h-4 w-4 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              <span className="text-amber-400 text-sm font-medium animate-pulse">{loadingStatus}</span>
+            </div>
+          </div>
+        )}
+        {(isLoading && !loadingStatus) && (
           <div className="flex justify-start">
             <div className="bg-gray-800/80 border border-gray-700/50 rounded-2xl px-5 py-4 flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '-0.3s' }}></div>
