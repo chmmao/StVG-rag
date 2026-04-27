@@ -36,11 +36,12 @@ rag-prototype/
 ├── src/
 │   ├── app/
 │   │   ├── api/chat/route.ts # POST /api/chat — RAG core logic
-│   │   ├── page.tsx          # Chat UI & Multimodal Image Parser
-│   │   └── layout.tsx        # App entry & SEO Metadata
+│   │   ├── favicon.ico       # Browser tab icon
+│   │   ├── globals.css       # Global styles (Tailwind & resets)
+│   │   ├── layout.tsx        # App entry & SEO Metadata
+│   │   └── page.tsx          # Chat UI & Multimodal Image Parser
 │   └── lib/
 │       └── ai-client.ts      # Shared logic with exponential backoff
-├── CODE-REVIEW.md           # Professional architectural audit notes
 ├── eslint.config.mjs        # Code quality & Linting configurations
 ├── next.config.ts           # Framework-specific build settings
 ├── package.json             # Dependencies & npm scripts
@@ -226,11 +227,12 @@ rag-prototype/
 ├── src/
 │   ├── app/
 │   │   ├── api/chat/route.ts # Edge API: Kernlogik & LLM-Orchestrierung
-│   │   ├── page.tsx          # UI & Regex-Bild-Parser
-│   │   └── layout.tsx        # App-Struktur & SEO-Metadaten
+│   │   ├── favicon.ico       # Browser-Tab-Icon
+│   │   ├── globals.css       # Globale Styles (Tailwind & Resets)
+│   │   ├── layout.tsx        # App-Struktur & SEO-Metadaten
+│   │   └── page.tsx          # UI & Regex-Bild-Parser
 │   └── lib/
 │       └── ai-client.ts      # Gemeinsame AI-Logik (Backoff-Retry)
-├── CODE-REVIEW.md           # Architekturaudit & Feedback
 ├── eslint.config.mjs        # Code-Qualität & Linting
 ├── next.config.ts           # Next.js Framework-Konfiguration
 ├── package.json             # Abhängigkeiten & Skripte
