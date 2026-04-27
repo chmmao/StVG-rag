@@ -1,4 +1,4 @@
-# ⚖️ Multimodal Legal RAG Prototype (StVO / StVG)
+# ⚖️ RAG Prototype — German Traffic Law (StVO/StVG)
 
 🌍 **[Deutsche Version unten](#-deutsche-version)**
 
@@ -9,60 +9,59 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
 
-## 🚀 Live Preview & Core Demo
+A retrieval-augmented generation (RAG) MVP built with Next.js, Supabase (pgvector), and free-tier LLM APIs. Answers questions about German traffic regulations by retrieving relevant legal text and generating responses with inline traffic sign images.
 
-![Live Demo Placeholder: Chat Interface showing a StVO question with a traffic sign image rendered instantly](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
-![LLM: Gemini 2.0 / Gemma 2](https://img.shields.io/badge/LLM-Multimodal--Fusion-blue)
+## What it does
 
-> **"What is the speed limit here? [IMAGE]"** -> *The system retrieves StVO § 3, identifies the sign marker, and renders the specific traffic sign .jpg locally from the public asset directory.*
+- Accepts natural-language questions about German traffic law (StVO/StVG)
+- Embeds the query with `gemini-embedding-001` (3072-dimensional vectors)
+- Retrieves the most relevant legal paragraphs via cosine similarity in pgvector
+- Sends retrieved context to an LLM through OpenRouter and returns an answer
+- Renders traffic sign images inline when the LLM references them — using **regex-based marker replacement** instead of an expensive Vision API
 
-### ⚡ Key Architectural Breakthroughs
-- **Zero-Cost Multimodality**: Bypasses expensive Vision LLM APIs using a **Regex-based Interception Layer** to snap-render 250+ traffic signs.
-- **Enterprise Multi-Tenancy**: Hardened via **PostgreSQL Row Level Security (RLS)** and dynamic `tenant_id` session variables.
-- **Resilient ETL**: Built-in **Exponential Backoff** retry logic to survive API rate-limits during bulk legal ingestion.
-- **High-Fidelity Vectors**: Optimized for **3072-dimensional** semantic embeddings (Gemini-001) for precise legal retrieval.
-
----
-
-## 1. Project Motivation & Problems Addressed
-
-This project is an End-to-End Retrieval-Augmented Generation (RAG) Minimum Viable Product (MVP) aimed at answering complex legal queries based on the German Traffic Law (StVO/StVG). 
-
-**The Challenge:** Traditional RAG systems struggle with multimodal documents (laws heavily reliant on traffic sign images). Passing thousands of images to Vision models for ingestion is financially exorbitant and critically slow. Furthermore, strict separation of legal domains (e.g., Traffic Law vs. Astrophysics) is required.
-
-**The Solution:** This project introduces a decoupled architecture featuring **Regex Interception** for zero-cost localized multimodality, **Context Array Fusion** for conversational continuity, and **Dynamic Model Routing** via OpenRouter allowing prompt-level LLM switching without server redeployment.
+*A second tenant (`tenant-a`) demonstrates the same pipeline on a small astronomy dataset.*
 
 ---
 
-## 2. Project Structure
+## Project structure
 
 ```text
 rag-prototype/
-├── public/                     # Static Assets (Multimodal Images & Icons)
-├── scripts/                    # Offline ETL Pipeline (Node.js/ESM)
-│   ├── diagnose.mjs            # Automated Health Check (CI-Ready)
-│   ├── ingest_universal.mjs    # Unified Ingestion: Idempotent Strategy Parser
-│   ├── purge_stvo.mjs          # Data Maintenance: Tenant Truncation
-│   └── test_api.mjs            # API Endpoint Connectivity Testing
+├── public/                  # Static traffic sign images and icons
+├── scripts/                 # Offline ETL pipeline (Node.js ESM)
+│   ├── ingest_universal.mjs # Chunks, embeds, and inserts documents into Supabase
+│   ├── diagnose.mjs         # Health check: DB, embedding API, RPC, RLS (npm run health)
+│   ├── purge_stvo.mjs       # Deletes all documents from a given source
+│   └── test_api.mjs         # Quick Gemini API connectivity test
 ├── src/
 │   ├── app/
-│   │   ├── api/chat/route.ts   # Edge API: RAG Retrieval & LLM Orchestration
-│   │   ├── globals.css         # UI Design System & Component Styling
-│   │   └── page.tsx            # Client View: Regex-driven Image Handler
+│   │   ├── api/chat/route.ts # POST /api/chat — RAG core logic
+│   │   ├── page.tsx          # Chat UI & Multimodal Image Parser
+│   │   └── layout.tsx        # App entry & SEO Metadata
 │   └── lib/
-│       └── ai-client.ts        # Shared AI Resilience & Embedding Logic
-├── .env.local                  # Environment Configuration (Git-ignored)
-├── package.json                # Project Manifest (Now with npm run health)
-└── README.md                   # System Architecture Documentation
+│       └── ai-client.ts      # Shared logic with exponential backoff
+├── CODE-REVIEW.md           # Professional architectural audit notes
+├── eslint.config.mjs        # Code quality & Linting configurations
+├── next.config.ts           # Framework-specific build settings
+├── package.json             # Dependencies & npm scripts
+├── package-lock.json        # Deterministic dependency lockfile
+├── postcss.config.mjs       # Tailwind CSS processing config
+└── tsconfig.json            # TypeScript compiler options
 ```
 
 ---
 
-## 3. Core Architecture & ETL Pipeline
+## Request flow
 
-The system enforces a strict separation of concerns between client rendering, edge API orchestration, and an offline Extract-Transform-Load (ETL) data pipeline.
+1. **Client** sends `{ message, tenant_id, llm_provider, history }` to `POST /api/chat`
+2. **Server** concatenates recent user messages from `history` for coreference resolution, then embeds the combined text via Gemini
+3. **Server** calls the `match_documents` RPC in Supabase, which runs a cosine similarity search (`<=>`) filtered by tenant
+4. If no results pass the similarity threshold (0.65), the server returns a fallback message immediately
+5. **Server** assembles a system prompt with the retrieved context and sends it to OpenRouter
+6. **OpenRouter** returns a text response; the server extracts it and passes it to the client with source metadata
+7. **Client** renders the response. If the text contains `![...](url)` markdown, it renders an `<img>` tag pointing to the local traffic sign asset
 
-### Chronological Request Flow (Sequence Diagram)
+### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -98,78 +97,71 @@ sequenceDiagram
     Frontend-->>User: Visual layout complete
 ```
 
-### The Offline ETL Pipeline (Data Engineering Layer)
-The ingestion layer operates asynchronously via `scripts/ingest_universal.mjs`, reflecting a production-ready **Extract-Transform-Load (ETL)** pattern:
-1. **Extract**: Ingests heterogeneous source files (XML, Markdown, Text) from local or cloud-native storage.
-2. **Transform (Semantic Chunking)**: Utilizing `cheerio` for XML DOM mutation. Unlike naive sliding windows, we enforce **Atomic Chunking** by splitting text precisely at legal `<norm>` boundaries.
-   - **Image Tokenization**: `<img />` tags are intercepted and converted into semantic text markers: `[VERKEHRSSCHILD_BILD: filename.jpg]`.
-3. **Load (Indempotent Loading)**:
-   - **Batching**: Processes 50-chunk payloads via Google’s `batchEmbedContents`.
-   - **Resilience**: Implements an **Exponential Backoff Engine** to handle Upstream Rate-Limits (HTTP 429).
-   - **Data Integrity**: (Roadmap) Hash-based deduplication to ensure ingestion is **Idempotent** (no duplicate laws on re-runs).
+---
+
+## Ingestion pipeline
+
+`scripts/ingest_universal.mjs` processes source files offline:
+
+- **XML (StVO/StVG):** Parses `<norm>` elements with cheerio. Replaces `<IMG>` tags with text markers like `[VERKEHRSSCHILD_BILD: filename.jpg]`, then chunks at paragraph boundaries (1000 chars with 200-char overlap)
+- **Markdown/Text:** Splits on paragraph breaks, then chunks with the same size/overlap parameters
+- **Embedding:** Sends chunks in batches of 50 to Gemini's `batchEmbedContents` endpoint
+- **Deduplication:** SHA-256 content hashing prevents re-inserting chunks that already exist in the database
+- **Retry:** Exponential backoff on HTTP 429 responses
+
+```bash
+# Dry-run to see chunking output without hitting any APIs
+node scripts/ingest_universal.mjs public/data/stvg.xml tenant-stvg --dry-run
+```
 
 ---
 
-## 5. 🚀 Data Engineering & ML Scalability Roadmap
+## Multi-tenancy & Security
 
-For a production deployment at scale (millions of legal documents), the architecture evolves as follows:
+Rows in the `documents` table are tagged with `metadata.tenant_id`. The `match_documents` RPC applies PostgreSQL `SECURITY INVOKER` logic, setting a transaction-scoped session variable (`app.current_tenant`). A strict **Row Level Security (RLS)** policy filters rows at the database level. The Edge API route also validates `tenant_id` against a hardcoded whitelist to prevent IDOR attacks.
 
-### A. Pipeline Orchestration (Apache Airflow)
-Current manual execution would be replaced by **Airflow DAGs**:
-- **Sensor Task**: Monitors governmental XML feeds for legal updates.
-- **Worker Task**: Triggers the Dockerized ingestion script.
-- **SLA Management**: Ensures the vector database is updated within 24h of a law change.
-
-### B. Distributed Processing (Apache Spark / Databricks)
-To scale horizontally across Public Cloud instances (AWS/GCP):
-- **Parallel Embedding**: Use PySpark to distribute embedding requests across a cluster, bypassing the limitations of single-node I/O.
-- **Delta Lake**: Store historical law versions for "Time-Travel" legal RAG.
-
-### C. Containerization & CI/CD
-- **Docker**: The ETL pipeline is containerized for consistent execution across environments.
-- **Terraform/IaC**: Infrastructure for Supabase/PostgreSQL is managed via code.
+**Caveat:** The tenant is chosen by the client in the request body. This is fine for an open-data prototype, but a production system should resolve the tenant server-side via cryptographic session tokens (JWT).
 
 ---
 
-## 6. Key Design Choices & Technical Rationales
+## Known limitations
 
-To deploy this project locally on your machine, follow these steps:
+- **No streaming:** The LLM response is returned in full, not streamed token-by-token
+- **Embedding model lock-in:** The database stores 3072-dimensional vectors from `gemini-embedding-001`. Switching models requires full DB re-ingestion
+- **Single-stage retrieval:** Top-K results use raw cosine similarity. A cross-encoder reranker would improve precision on large corporate datasets
+
+---
+
+## Setup & Deployment
 
 ### Prerequisites
-- Node.js (v18+)
-- A [Supabase](https://supabase.com/) account
-- API Keys for Google Gemini and OpenRouter
+- Node.js 18+
+- A Supabase project with pgvector enabled
+- Google Gemini API key & OpenRouter API key
 
-### 1. Supabase Database Configuration
-Execute the following SQL string in your Supabase SQL Editor to initialize the vector store and the RPC retrieval function:
+### 1. Database Configuration
+Run the following SQL in the Supabase SQL editor:
 ```sql
--- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Create table (uuid based, dimension-agnostic for scalability)
 CREATE TABLE public.documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     content text NOT NULL,
     metadata jsonb,
-    embedding vector 
+    embedding vector
 );
 
--- Enable Row Level Security (RLS)
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 
--- Block unauthorized leakage, strictly tying tenant_id to active queries
-CREATE POLICY tenant_isolation ON public.documents FOR SELECT TO anon 
+CREATE POLICY tenant_isolation ON public.documents FOR SELECT TO anon
 USING (metadata->>'tenant_id' = current_setting('app.current_tenant', true));
 
--- RPC Function implementing Security Invoker for RLS obedience
 CREATE OR REPLACE FUNCTION match_documents (
   query_embedding vector, match_threshold float, match_count int, filter_tenant_id text
 ) RETURNS TABLE (id uuid, content text, metadata jsonb, similarity float)
 LANGUAGE plpgsql SECURITY INVOKER AS $$
 BEGIN
-  -- Inject the requested tenant into Postgres transaction context
   PERFORM set_config('app.current_tenant', filter_tenant_id, true);
-  
   RETURN QUERY
   SELECT d.id, d.content, d.metadata, 1 - (d.embedding <=> query_embedding) as similarity
   FROM public.documents d
@@ -180,95 +172,26 @@ END;
 $$;
 ```
 
-### 2. Local Environment Setup
-Clone the repository and install dependencies:
+### 2. Environment Variables
 ```bash
 git clone <repository-url>
 cd rag-prototype
 npm install
 ```
-
-Create a `.env.local` file in the root directory:
+Create `.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-key
-GEMINI_API_KEY=your-google-gemini-key
-OPENROUTER_API_KEY=your-openrouter-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+GEMINI_API_KEY=AIza...
+OPENROUTER_API_KEY=sk-or-...
 ```
-
-### 🗝️ Key Vault Breakdown
-- **`NEXT_PUBLIC_SUPABASE_URL`**: The domain address of your database. Not a secret.
-- **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**: The "Guest Pass". Read by the Next.js API to query answers. Completely neutered by Postgres RLS, it cannot accidentally overwrite or destroy laws.
-- **`SUPABASE_SERVICE_ROLE_KEY`**: The "God-Mode Pass". Bypasses all security firewalls. Never exposed to Next.js; strictly bound offline to `scripts/ingest_universal.mjs` for raw backend data loading.
-- **`GEMINI_API_KEY`**: Senses semantics and builds Mathematical Vectors.
-- **`OPENROUTER_API_KEY`**: The conversational linguistic broker.
 
 ### 3. Run the System
-*(Optional)* If you wish to re-ingest the data pipeline:
 ```bash
-node scripts/ingest_universal.mjs ./data/stvg.xml tenant-stvg
-# 💡 Add --dry-run to test chunking & extraction locally without hitting the database or LLM API!
-```
-
-Start the Next.js development server:
-```bash
-npm run dev
-```
-Navigate to `http://localhost:3000`.
-
----
-
-## 5. Key Design Choices & Technical Rationale
-
-This MVP reflects deliberate architectural paradigms mapped directly to our Sequence Diagram:
-
-### Phase 1: Context State Management
-*   **Why rely on React state for `N-1 History` (Memory Context Fusion)?**
-    Forcing conversational memory to operate entirely stateless on the Next.js backend drastically reduces database read/write volume. The UI client passes its history array in the HTTP body, mitigating Grammatical Coreferences (e.g. asking "What does *it* mean?") instantly without relying on rigid server-side JWT session architectures for MVP validation.
-
-### Phase 2: Vectorization & Retrieval
-*   **Why utilize `gemini-embedding-001` configured to 3072 dimensions?**
-    The 3072-dimension structure provides high-fidelity semantic resolution critical for parsing complex legal language. We selected `gemini-embedding-001` explicitly for its generous free-tier batch-processing limits and superior multilingual (German) performance.
-*   **Why execute search logic via an RPC (`match_documents`) instead of pulling DB data into Next.js?**
-    Maximum Network Efficiency. Vector matching requires assessing thousands of complex floats. Processing Cosine Distance limits (`<=>`) specifically within the native PostgreSQL extension avoids completely serializing massive vector records over HTTPS, returning only Top-K strings to the Node environment.
-
-### Phase 3: Generative Proxy Invocation
-*   **Why proxy generation through `OpenRouter` instead of querying LLMs natively from frontend?**
-    Enforces a strict "Blind Generation" paradigm. By shifting request assembly strictly to the backend `route.ts`, the final generative LLM stays completely oblivious to the private structure of the retrieved Postgres chunks or System prompt instructions dictating Marker conversions. The user can switch the underlying foundation model (Gemini, Gemma, etc.) dynamically via the UI without requiring environment variable restarts or backend redeployments.
-
-### Phase 4: Payload Parsing & Native Render
-*   **Why intercept Output streams with `Regex` rather than relying on Vision LLM models natively?**
-    Feeding hundreds of traffic sign images through a Vision LLM API is financially and computationally exorbitant, provoking heavy processing lag and risk of "hallucinations". By executing offline `[VERKEHRSSCHILD_BILD: xyz]` marker replacement within the XML Extraction process, the LLM treats images merely as text strings to output. Front-end React intercepts this pattern instantly—cutting the text stream and snapping physical image routes functionally local to the server. This yields 100% multimodality overhead-free.
-
----
-
-## 6. Architectural Limitations & Boundaries
-
-Due to execution constraints necessary for building an MVP, technical debts reside within this architecture model:
-
-1. **Weak Namespace Isolation (Security)**: Retrieval namespace segmentation operates by relying on the client transmitting plaintext boundaries (`tenant_id`). While operationally acceptable for navigating open-source datasets, for production enterprise adoption, target `tenant_id` resolution must operate exclusively relying on validated cryptographic Session Tokens (JWT) passing contexts into backend Postgres RLS policies.
-2. **Dimension-Model Coupling**: The database stores 3072-dimensional vectors generated by `gemini-embedding-001`. Switching to a different embedding model with different output dimensions would require full re-ingestion of all data.
-3. **Naive Single-Stage Retrieval Fidelity**: Top-K responses rely comprehensively on straightforward nearest-neighbor Cosine Similarity comparisons without filtering. Advanced pipelines mandate standardizing a **Cross-Encoder Reranking** process immediately post-retrieval to evaluate semantic relation structures with high precision, eliminating "Lost in the Middle" LLM inaccuracies.
----
-
-## 7. ✅ Production-Ready Checklist
-
-The following enterprise-grade features have been implemented beyond the core MVP:
-
-| Feature | Status | Implementation |
-|---|---|---|
-| **Row Level Security (RLS)** | ✅ | `SECURITY INVOKER` + `tenant_id` session isolation in PostgreSQL |
-| **Tenant Validation** | ✅ | Hardcoded whitelist in `route.ts` rejects unknown namespaces at the API boundary |
-| **Idempotent Ingestion** | ✅ | SHA-256 content hashing in `ingest_universal.mjs` prevents data duplication on re-runs |
-| **API Resilience** | ✅ | Exponential backoff retry for Embedding API (shared via `src/lib/ai-client.ts`) |
-| **Circuit Breaker** | ✅ | `match_threshold` in `match_documents` RPC prevents hallucination on low-confidence results |
-| **Automated Health Check** | ✅ | `npm run health` validates DB connectivity, vector dimensions (3072), RPC, and RLS isolation |
-| **Shared AI Client** | ✅ | Centralized embedding logic in `src/lib/ai-client.ts` with cross-referenced ETL copy |
-
-### Quick Verification
-```bash
-npm run health    # CI-ready: exits 0 on success, 1 on failure
+node scripts/ingest_universal.mjs public/data/stvg.xml tenant-stvg
+npm run dev        # → Starts UI on http://localhost:3000
+npm run health     # CI-ready Check: verify DB, embedding API, RPC, and RLS
 ```
 
 ---
@@ -281,143 +204,58 @@ npm run health    # CI-ready: exits 0 on success, 1 on failure
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
 
-## 🚀 Live-Vorschau & Core-Demo
+Ein Retrieval-Augmented Generation (RAG) MVP, entwickelt mit Next.js, Supabase (pgvector) und LLM-APIs. Das System beantwortet Fragen zur deutschen Straßenverkehrsordnung (StVO/StVG), indem es relevante Gesetzestexte abruft und Antworten mit direkt eingebetteten Verkehrszeichen generiert.
 
-![Live Demo Placeholder: Chat Interface zeigt eine StVO-Anfrage mit sofort gerendertem Verkehrszeichen](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
-![LLM: Gemini 2.0 / Gemma 2](https://img.shields.io/badge/LLM-Multimodal--Fusion-blue)
+## Kernfunktionen
 
-> **"Welche Geschwindigkeit gilt hier? [BILD]"** -> *Das System ruft StVO § 3 ab, erkennt den Bild-Marker und rendert das spezifische Verkehrszeichen (.jpg) direkt aus dem lokalen Asset-Verzeichnis.*
+- Beantwortet natürlichsprachliche Fragen zum deutschen Verkehrsrecht.
+- Vektorisiert Suchanfragen mit `gemini-embedding-001` (3072 Dimensionen).
+- Nutzt die Kosinus-Ähnlichkeitssuche in pgvector für präzisen Textabruf.
+- **0-Kosten Multimodalität**: Ersetzt teure Vision-APIs durch eine Regex-basierte Logik, die Verkehrszeichen im Textfluss in Echtzeit als lokale Bilder rendert.
 
-### ⚡ Architektonische Meilensteine
-- **0-Kosten Multimodalität**: Umgeht teure Vision-LLM-APIs durch eine **Regex-basierte Interception-Layer**, um über 250 Verkehrszeichen blitzschnell zu rendern.
-- **Enterprise Multi-Tenancy**: Absicherung durch **PostgreSQL Row Level Security (RLS)** und dynamische `tenant_id` Sitzungsvariablen.
-- **Resiliente ETL-Pipeline**: Integrierte **Exponential Backoff** Logik, um API-Rate-Limits während der massenhaften Datenindizierung zu bewältigen.
-- **High-Fidelity Vektoren**: Optimiert für **3072-dimensionale** semantische Embeddings (Gemini-001) für präzise juristische Abfragen.
-
----
-
-## 1. Projektmotivation & Lösungsansatz
-
-Dieses Projekt ist ein Minimum Viable Product (MVP) für ein End-to-End Retrieval-Augmented Generation (RAG) System, das komplexe rechtliche Fragen auf Basis der deutschen Straßenverkehrsordnung (StVO/StVG) beantwortet.
-
-**Die Herausforderung:** Traditionelle RAG-Systeme scheitern oft an multimodalen Dokumenten (Gesetze, die stark von Abbildungen der Verkehrszeichen abhängen). Tausende Bilder über Vision-Modelle zu indexieren, ist finanziell exorbitant teuer und langsam. 
-
-**Die Lösung:** Eine entkoppelte Architektur mit **Regex-Interception** für eine kostenlose Bild-Einbettung, **Context-Fusion** (Gesprächshistorie) für kontextuelle Kontinuität und **Dynamic Model Routing** über OpenRouter.
-
-## 3. Projektstruktur
+## Projektstruktur
 
 ```text
 rag-prototype/
-├── public/                     # Statische Assets (Multimodale Bilder & Icons)
-├── scripts/                    # Offline ETL-Pipeline (Node.js/ESM)
-│   ├── diagnose.mjs            # Automatisierter Health-Check (CI-Ready)
-│   ├── ingest_universal.mjs    # Unified Ingestion: Idempotenter Parser
-│   ├── purge_stvo.mjs          # Datenbereinigung: Tenant-Löschung
-│   └── test_api.mjs            # API-Konnektivitätstest
+├── public/                  # Statische Assets (Verkehrszeichen & Icons)
+├── scripts/                 # Offline ETL-Pipeline (Node.js/ESM)
+│   ├── ingest_universal.mjs # Unified Ingestion: Idempotenter Parser
+│   ├── diagnose.mjs         # Automatisierter Health-Check (CI-Ready)
+│   ├── purge_stvo.mjs       # Datenbereinigung: Tenant-Löschung
+│   └── test_api.mjs         # API-Konnektivitätstest
 ├── src/
 │   ├── app/
-│   │   ├── api/chat/route.ts   # Edge API: RAG-Abruf & LLM-Orchestrierung
-│   │   ├── globals.css         # UI Design System & Styling
-│   │   └── page.tsx            # Client View: Regex-gesteuerter Bild-Parser
+│   │   ├── api/chat/route.ts # Edge API: Kernlogik & LLM-Orchestrierung
+│   │   ├── page.tsx          # UI & Regex-Bild-Parser
+│   │   └── layout.tsx        # App-Struktur & SEO-Metadaten
 │   └── lib/
-│       └── ai-client.ts        # Gemeinsame AI-Logik & Embedding-Library
-├── .env.local                  # Umgebungsvariablen (Git-ignoriert)
-├── package.json                # Projekt-Manifest (Inkl. npm run health)
-└── README.md                   # Systemarchitektur-Dokumentation
+│       └── ai-client.ts      # Gemeinsame AI-Logik (Backoff-Retry)
+├── CODE-REVIEW.md           # Architekturaudit & Feedback
+├── eslint.config.mjs        # Code-Qualität & Linting
+├── next.config.ts           # Next.js Framework-Konfiguration
+├── package.json             # Abhängigkeiten & Skripte
+├── package-lock.json        # Abhängigkeit-Sperrdatei
+├── postcss.config.mjs       # CSS-Verarbeitung (Tailwind)
+└── tsconfig.json            # TypeScript-Konfiguration
 ```
 
-## 4. Kernarchitektur & ETL-Pipeline
+## Request Flow (Ablauf)
+*(Ein detailliertes UML-Sequenzdiagramm befindet sich im englischen Teil).*
 
-*(Hinweis: Das Sequenzdiagramm befindet sich im englischen Teil oben).*
+1. **Client** sendet die Anfrage inklusive Mandanten-ID (`tenant_id`) an die API.
+2. **Server** ergänzt den Chat-Verlauf für Kontext-Auflösungen und vektoriert den Text.
+3. **Datenbank** führt eine via Row Level Security geschützte Ähnlichkeitssuche aus.
+4. **Server** baut den Prompt aus dem gefundenen rechtlichen Kontext zusammen und triggert das ausgewählte LLM (über OpenRouter).
+5. **Client** empfängt den formatierten Text. Tritt im Markdown ein Bild-Marker (`![...](url)`) auf, wird das korrekte Verkehrszeichen-Asset geladen.
 
-### Die Offline ETL-Pipeline (Data Engineering Layer)
-Die Datenaufbereitung operiert völlig unabhängig von der Next.js Serverumgebung über das Skript `scripts/ingest_universal.mjs` und folgt einem produktionsreifen **ETL-Muster**:
-1. **Extract**: Liest heterogene Quelldateien (XML, Markdown, Text) aus lokalen oder Cloud-Speichern ein.
-2. **Transform (Semantic Chunking)**: Nutzt `cheerio` für XML-Mutationen. Wir erzwingen **Atomic Chunking**, indem wir Texte präzise an Paragraphen-Grenzen (`<norm>`) trennen, statt ungenaue Sliding-Windows zu nutzen.
-   - **Bild-Tokenisierung**: `<img>` Tags werden abgefangen und in semantische Text-Marker umgewandelt: `[VERKEHRSSCHILD_BILD: dateiname.jpg]`.
-3. **Load (Idempotente Indexierung)**:
-   - **Batching**: Verarbeitet Chunks in 50er-Paketen via `batchEmbedContents`.
-   - **Resilienz**: Implementiert eine **Exponential Backoff-Engine**, um API-Rate-Limits (HTTP 429) abzufedern.
-   - **Datenintegrität**: Hash-basierte Deduplizierung stellt sicher, dass die Indexierung **idempotent** ist (keine Duplikate bei wiederholten Durchläufen).
+## Ingestion Pipeline (Datenaufbereitung)
+Das Skript `scripts/ingest_universal.mjs` verarbeitet Quelldateien asynchron:
+- Parst XML `<norm>`-Elemente und wandelt `<IMG>`-Tags in Textmarker um.
+- Zerschneidet Texte an Paragraphengrenzen (1000 Zeichen / 200 Zeichen Überlappung).
+- Vermeidet Daten-Duplikate idempotent via **SHA-256 Hashing**.
+- Federt API-Rate-Limits mit **Exponential Backoff** ab.
 
----
+## Sicherheit & Mandantenfähigkeit (Multi-tenancy)
+Die Datenbank ist durch **PostgreSQL Row Level Security (RLS)** strikt getrennt. Die `match_documents` RPC-Funktion wendet `SECURITY INVOKER` an und injiziert die Mandanten-ID sicher in die laufende Datenbanktransaktion. Auf API-Ebene greift zudem ein Hardcoded-Whitelist-Schutz.
 
-## 5. 🚀 Roadmap: Data Engineering & Skalierbarkeit
-
-Für den produktiven Einsatz im großen Stil (Millionen von Dokumenten) sieht die Architektur folgende Evolutionsstufen vor:
-
-### A. Pipeline-Orchestrierung (Apache Airflow)
-Die manuelle Ausführung wird durch **Airflow DAGs** ersetzt:
-- **Sensor Task**: Überwacht Regierungs-Feeds auf Gesetzesänderungen.
-- **Worker Task**: Triggert das dockerisierte Ingestion-Skript.
-- **SLA Management**: Garantiert Updates der Vektordatenbank innerhalb von 24 Stunden.
-
-### B. Verteilte Verarbeitung (Apache Spark / Databricks)
-Horizontale Skalierung in der Cloud (AWS/GCP):
-- **Paralleles Embedding**: Nutzung von PySpark, um Embedding-Anfragen über einen Cluster zu verteilen.
-- **Delta Lake**: Speicherung historischer Gesetzesstände für "Time-Travel" RAG-Abfragen.
-
-### C. Containerisierung & CI/CD
-- **Docker**: Die ETL-Pipeline wird für konsistente Ausführung containerisiert.
-- **Terraform/IaC**: Die Infrastruktur für Supabase/PostgreSQL wird als Code verwaltet.
-
----
-
-## 6. Kern-Designentscheidungen (Phasenbasiert)
-
-### 1. Supabase Datenbank-Setup
-Führe das folgende SQL-Skript im Supabase Query Editor aus, um die Vektordatenbank und die RPC-Funktion zu initialisieren:
-*(Das SQL-Skript befindet sich im englischen Teil).*
-
-### 2. Lokales Setup
-Repository klonen und Node-Pakete installieren:
-```bash
-git clone <repository-url>
-cd rag-prototype
-npm install
-```
-
-Eine `.env.local` Datei im Hauptverzeichnis mit folgenden Schlüsseln anlegen:
-```env
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-GEMINI_API_KEY=...
-OPENROUTER_API_KEY=...
-```
-
-### 3. System starten (Dev Server)
-```bash
-npm run dev
-```
-*(Die Applikation läuft jetzt auf http://localhost:3000).*
-
-## 6. Kern-Designentscheidungen (Phasenbasiert)
-
-Dieses MVP demonstriert kritische Technologie-Entscheidungen, referenziert auf das obige Sequenzdiagramm:
-
-### Phase 1: Context State Management
-*   **Warum basiert die `N-1 History` (Koreferenzauflösung) auf dem React State?**
-    Die Verlagerung der Gesprächshistorie in den clientseitigen Payload löst Koreferenzfragen (z.B. Folgefragen wie "Und was ist damit gemeint?") augenblicklich auf. Es macht ein zustandsbehaftetes Serverprotokoll oder Session-Datenbanken für dieses zeitlich eingeschränkte MVP obsolet.
-
-### Phase 2: Vectorization & Retrieval
-*   **Warum die Nutzung von `gemini-embedding-001` mit 3072 Dimensionen?**
-    3072 Dimensionen bieten eine hochauflösende semantische Erfassung, die für die Analyse komplexer Rechtssprache entscheidend ist. Die Auswahl dieses Modells erfolgte aufgrund des großzügigen Free-Tier-Volumens für Massenverarbeitungen und der hervorragenden mehrsprachigen (deutschen) Leistung.
-*   **Warum läuft die Vektormathematik isoliert in der `RPC: match_documents` Methode?**
-    Um extreme Netzwerkeffizienzen zu generieren. Statt 10.000 generische Floating-Arrays durch das HTTPS-Nadelöhr in das Next.js Backend zu ziehen, um dort via Javascript zu sortieren, zwingt der Server die postgres-interne C++ Ebene via RPC, die Cosine Distanz (`<=>`) lokal auszuführen. Es fließen nur die 5 Textknoten durch das Kabel zurück.
-
-### Phase 3: Generative Proxy Invocation
-*   **Warum die Isolation der LLMs durch `OpenRouter`?**
-    "Blind Generation" Design: Wir übermitteln dem ausführenden Generator ausschließlich saubere Textanweisungen. OpenRouter erlaubt es zudem, das finale Modell im Frontend ohne Zero-Day-Deployments jederzeit umzuschalten ("Hot-Swapping" von Gemini auf DeepSeek auf Llama).
-
-### Phase 4: Payload Parsing & Native Render
-*   **Warum das Abfangen der Ausgaben mit einer `Regex`-Logik anstelle der Nutzung nativer Vision LLMs?**
-    Hunderte Verkehrszeichen in der Ingestion-Phase von echten KI-Augen dekonstruieren zu lassen führt zwangsläufig in den finanziellen Bankrott und treibt Latenzen ins Unermessliche. Indem unser ETL-Skript den XML `<img/>` Code durch reine Text-Anker (`[BILD...]`) austauscht, denken unsere LLMs, sie transferieren Texte. Das Frontend-React entdeckt (via Regex) diese Anweisungen im Millisekundentakt, kappt den Textstrang und mounted lokal abgelegte `.jpg` Dateien direkt im DOM. 100% Overhead-freie Multimodalität.
-
-## 7. Architektonische Einschränkungen (Technical Debt)
-
-Um dieses End-to-End System schnell zu iterieren, gibt es architektonische Schulden:
-
-1. **Schwache Namespace-Sicherheit (RLS via Frontend)**: Aktuell wählt der Client den Tenant über das Plaintext-Parameter `tenant_id` (`POST`). Für öffentliche Lexika vertretbar, im Corporate/SaaS-Bereich muss eine zwingende serverseitige Begrenzung über kryptografische JWT-Session-Tokens eingeführt werden.
-2. **Dimensions-Modell-Kopplung**: Die Datenbank speichert 3072-dimensionale Vektoren, generiert durch `gemini-embedding-001`. Ein Wechsel zu einem anderen Embedding-Modell mit abweichender Ausgabedimension erfordert eine vollständige Neuindizierung aller Daten.
-3. **Naive Recall Bias (Einphasen-Abruf)**: Das System vertraut bei den Top-K Treffern derzeit blind der reinen "Nearest-Neighbor" Distanz. Bei der Skalierung auf riesige Korpora ist im Backend ein nachgeschalteter **Cross-Encoder Reranker** (z. B. Cohere Rerank) unerlässlich, bevor der Kontext an das LLM geschickt wird.
+*(Das SQL-Setup-Skript zur Installation finden Sie im englischen Anleitungsteil).*
