@@ -26,10 +26,13 @@ export async function embedWithRetry(
 ): Promise<number[]> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
         body: JSON.stringify({
           model: 'models/gemini-embedding-001',
           content: { parts: [{ text }] },
@@ -42,10 +45,15 @@ export async function embedWithRetry(
       return data.embedding.values;
     }
 
-    // Transient failure → retry with backoff
     const errText = await res.text();
+
+    // Abort early on permanent client errors (except Rate Limit 429)
+    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+      throw new Error(`Permanent client error: ${res.status} ${errText}`);
+    }
+
     console.error(
-      `[ai-client] Embedding attempt ${attempt + 1}/${maxRetries} failed: ${res.status} ${errText}`
+      `[ai-client] Embedding attempt ${attempt + 1}/${maxRetries} failed: ${res.status} ${errText} - Retrying...`
     );
 
     if (attempt + 1 >= maxRetries) {

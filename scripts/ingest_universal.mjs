@@ -29,11 +29,17 @@ async function fetchWithBackoff(fetchFn, maxRetries = 5, baseDelay = 3000) {
     try {
       const response = await fetchFn();
       if (!response.ok) {
-        if (response.status === 429) throw new Error("429 Too Many Requests");
-        throw new Error(await response.text());
+        const errText = await response.text();
+        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          const err = new Error(`Permanent client error: ${response.status} ${errText}`);
+          err.isPermanent = true;
+          throw err;
+        }
+        throw new Error(`${response.status} ${errText}`);
       }
       return await response.json();
     } catch (e) {
+      if (e.isPermanent) throw e;
       attempt++;
       console.warn(`[API] Attempt ${attempt} failed: ${e.message}`);
       if (attempt >= maxRetries) {

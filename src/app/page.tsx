@@ -6,20 +6,24 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string, sources?: any[] }[]>([]);
   const [input, setInput] = useState('');
   const [tenant, setTenant] = useState('tenant-stvg');
-  const [llmProvider, setLlmProvider] = useState('openrouter/elephant-alpha');
+  const [llmProvider, setLlmProvider] = useState('deepseek-v4-flash');
   const [isLoading, setIsLoading] = useState(false);
 
   const renderMessageContent = (text: string) => {
     const parts = text.split(/!\[.*?\]\((.*?)\)/g);
     return parts.map((part, index) => {
       if (index % 2 === 1) {
+        // Guard clause: Only mount images mapped to the local asset directory
+        if (!part.startsWith('/data/')) {
+          return <span key={`img-err-${index}`} className="text-red-500 text-sm">[Ungültige Bildquelle: {part}]</span>;
+        }
         return (
-          <div key={index} className="my-4 p-2 bg-gray-100/10 border border-gray-700/50 rounded-lg inline-block shadow-md">
+          <div key={`img-wrap-${index}-${part}`} className="my-4 p-2 bg-gray-100/10 border border-gray-700/50 rounded-lg inline-block shadow-md">
              <img src={part} alt="Verkehrsschild" className="h-28 w-auto object-contain bg-gray-200 rounded" />
           </div>
         );
       }
-      return <span key={index}>{part}</span>;
+      return <span key={`text-span-${index}`}>{part}</span>;
     });
   };
 
@@ -75,12 +79,9 @@ export default function ChatPage() {
               value={llmProvider}
               onChange={(e) => setLlmProvider(e.target.value)}
             >
-              <option value="openrouter/auto">🚀 Auto-Router (Default)</option>
-              <option value="openrouter/elephant-alpha">Elephant Alpha (Free High-Context)</option>
-              <option value="google/gemma-4-31b-it:free">Gemma 4 31B-IT (Free)</option>
-              <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron-3 Super 120B (Free)</option>
-              <option value="openai/gpt-oss-120b:free">GPT-OSS 120B (Free High-Perf)</option>
-              <option value="openai/gpt-oss-20b:free">GPT-OSS 20B (Free Lightweight)</option>
+              <option value="deepseek-v4-flash">🌑 DeepSeek V4 (Direct - Paid)</option>
+              <option value="gemini-1.5-flash-direct">💎 Gemini Direct (Student)</option>
+              <option value="openrouter/auto">🚀 OpenRouter: Auto</option>
             </select>
           </div>
         </div>

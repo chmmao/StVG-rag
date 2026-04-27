@@ -58,10 +58,13 @@ async function diagnose() {
   let testVector = null;
   try {
     const embedRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY
+        },
         body: JSON.stringify({
           model: 'models/gemini-embedding-001',
           content: { parts: [{ text: 'Health check test vector' }] },
